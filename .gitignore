@@ -1,0 +1,39 @@
+# Python Bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual Environments
+.venv/
+venv/
+
+# Editor
+.idea/
+.vscode/
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Logs / Temp
+*.log
+*.tmp
+*.swp
+
+# Build
+dist/
+build/
+*.egg-info/
+
+# Environment
+.env
+.env.*
+.secret
+
+# Jupyter
+.ipynb_checkpoints/
+
+# DB, output
+outputs/
+sample/
+*.sqlite3
