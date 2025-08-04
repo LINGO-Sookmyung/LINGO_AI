@@ -2,6 +2,7 @@ import openai
 import base64
 from typing import List
 from dotenv import load_dotenv
+from utils.clean_gpt_response import clean_gpt_response
 import os
 
 load_dotenv()  # .env 파일 로드
@@ -24,26 +25,27 @@ def get_prompts_by_doc_type(doc_type:str) -> tuple[str,str]:
             주어진 이미지들은 등기사항일부증명서의 스캔본입니다. 표 안에 있는 내용을 그대로 분석해서, 최대한 문서 구조를 유지한 JSON 형태로 변환해주세요.
             아래 사항을 반드시 지켜주세요:
             - 셀 안의 텍스트를 사람이 보이는 대로 그대로 사용해주세요.
+            - 중복되는 내용이 있더라도 정리하지 말고 그대로 적어주세요.
             - 표제부, 명의인 등은 항목 단위로 나누고, 내부 항목은 딕셔너리처럼 구성해주세요.
             - 항목명이 없는 셀이나 병합된 셀도 보이는 대로 묶어 적어주세요.
+            - 참고사항 및 비고도 적어주세요.
             - 날짜, 주소, 이름, 지분 등을 해석하지 말고 그대로 써 주세요.
             """,
             """
             예시:
-            ```json
             {
             "등기사항일부증명서(현재 소유현황)": {
                 "등기유형": "건물",
                 "고유번호": "...",
                 "주소": "...",
-                "표제부": {
+                "【 표제부 】 (건물의 표시)": {
                 "표시번호": "1",
                 "접수": "2011년 4월 23일",
                 "소재지번, 건물명칭 및 번호": "...",
                 "건물내역": "...",
                 "등기원인 및 기타사항": "..."
                 },
-                "명의인": {
+                "【 명의인 】": {
                 "등기명의인": "...",
                 "(주민)등록번호": "...",
                 "최종지분": "..."
@@ -82,7 +84,6 @@ def get_prompts_by_doc_type(doc_type:str) -> tuple[str,str]:
             """,
             """
             예시:
-            ```json
             {
                 "가족관계증명서(일반)": {
                     "문서종류": "가족관계증명서(일반)",
@@ -162,31 +163,31 @@ def get_prompts_by_doc_type(doc_type:str) -> tuple[str,str]:
 
             다음 사항을 반드시 지켜주세요:
             - 문서에 적힌 항목은 순서대로 모두 반영해주세요.
+            - 일치하는 항목이 없는경우 "" 으로 놔두세요.
             - 문서 상단과 하단의 발급 정보 및 인증 정보도 함께 JSON에 포함해 주세요.
-            - 날짜, 번호, 기관명, 책임자 이름은 텍스트 그대로 옮겨 적어 주세요.
+            - 날짜, 번호, 기관명, 발급인(총장, 이사, 이름 등)은 텍스트 그대로 옮겨 적어 주세요.
 
             """,
             """
+            {
+                "문서확인번호": "",
+                "제출처": "",
+                "용도": "",
+                "재학증명서": {
+                    "성명": "",
+                    "생년월일": "",
+                    "소속": "",
+                    "학년": ""
+                },
+                "발급일": "",
+                "발급기관": "",
+                "발급인": "",
+                "본문": ""
+                }
             """
         )
     else:
         raise ValueError("지원하지 않는 문서 유형입니다.")
-
-def clean_gpt_response(raw_text: str) -> str:
-    # 양쪽 공백 제거
-    text = raw_text.strip()
-
-    # 첫 줄이 ```json 또는 ```이면 제거
-    if text.startswith("```json"):
-        text = text[len("```json"):].lstrip()
-    elif text.startswith("```"):
-        text = text[len("```"):].lstrip()
-
-    # 마지막 줄이 ```이면 제거
-    if text.endswith("```"):
-        text = text[:-len("```")].rstrip()
-
-    return text
 
 def call_gpt_for_structured_json(image_paths: List[str], doc_type:str) -> str:
     encoded_images = encode_images_to_base64(image_paths)

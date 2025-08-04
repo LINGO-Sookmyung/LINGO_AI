@@ -10,12 +10,17 @@ import uuid
 from utils.image_processing import binarize_image
 from utils.ocr_client import call_ocr
 from utils.gpt_client import call_gpt_for_structured_json
+from utils.translate_gpt_client import call_gpt_for_translate_json
 
 app = FastAPI()
 
 class MultiImagePathRequest(BaseModel):
     image_paths: List[str]  # 여러 이미지 경로 리스트
     doc_type: str
+
+class JsonPathRequest(BaseModel):
+    json_path: str
+    lang: str
 
 def delete_directory(path: str):
     shutil.rmtree(path)
@@ -52,22 +57,22 @@ def binarize_and_ocr_multi(request: MultiImagePathRequest, background_tasks: Bac
 
         # GPT 결과 호출
         gpt_json_result = call_gpt_for_structured_json(image_paths_for_gpt, request.doc_type)
-        gpt_result_path = os.path.join(output_dir, "gpt_structured_result.json")
+        gpt_result_path = os.path.join(output_dir, f"{base_name}_gpt_structured_result.json")
         with open(gpt_result_path, 'w', encoding='utf-8') as f:
             f.write(gpt_json_result)
 
         # 결과 저장 및 반환 방식 분기
         if request.doc_type == "부동산등기부등본":
             # OCR 결과도 합쳐서 저장
-            ocr_merged_path = os.path.join(output_dir, "ocr_results.json")
+            ocr_merged_path = os.path.join(output_dir, f"{base_name}_ocr_results.json")
             with open(ocr_merged_path, 'w', encoding='utf-8') as f:
                 json.dump(results, f, indent=2, ensure_ascii=False)
 
             # Zip으로 묶음
-            zip_path = os.path.join(output_dir, "ocr_and_gpt_results.zip")
+            zip_path = os.path.join(output_dir, f"{base_name}_ocr_and_gpt_results.zip")
             with zipfile.ZipFile(zip_path, 'w') as zipf:
-                zipf.write(ocr_merged_path, arcname="ocr_results.json")
-                zipf.write(gpt_result_path, arcname="gpt_structured_result.json")
+                zipf.write(ocr_merged_path, arcname=f"{base_name}_ocr_results.json")
+                zipf.write(gpt_result_path, arcname=f"{base_name}_gpt_structured_result.json")
             
             # 요청 끝나고 디렉토리 삭제 예약
             background_tasks.add_task(delete_directory, output_dir)
@@ -75,7 +80,7 @@ def binarize_and_ocr_multi(request: MultiImagePathRequest, background_tasks: Bac
             return FileResponse(
                 path=zip_path,
                 media_type="application/zip",
-                filename="ocr_and_gpt_results.zip"
+                filename=f"{base_name}_ocr_and_gpt_results.zip"
             )
         else:
             # 요청 끝나고 디렉토리 삭제 예약
@@ -85,7 +90,25 @@ def binarize_and_ocr_multi(request: MultiImagePathRequest, background_tasks: Bac
             return FileResponse(
                 path=gpt_result_path,
                 media_type="application/json",
-                filename="gpt_structured_result.json"
+                filename="f{base_name}_gpt_structured_result.json"
             )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/translate")
+def translate (request: JsonPathRequest):
+    base_name = os.path.basename(request.json_path).split('.')[0]
+    session_id = str(uuid.uuid4())
+    output_dir = os.path.join("outputs", session_id)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    gpt_json_result = call_gpt_for_translate_json(request.json_path, request.lang)
+    gpt_result_path = os.path.join(output_dir, f"{base_name}_gpt_translate_result.json")
+    with open(gpt_result_path, 'w', encoding='utf-8') as f:
+        f.write(gpt_json_result)
+
+    return FileResponse(
+                path=gpt_result_path,
+                media_type="application/json",
+                filename=f"{base_name}_gpt_translate_result.json"
+            )
