@@ -90,7 +90,7 @@ def binarize_and_ocr_multi(request: MultiImagePathRequest, background_tasks: Bac
             return FileResponse(
                 path=gpt_result_path,
                 media_type="application/json",
-                filename="f{base_name}_gpt_structured_result.json"
+                filename=f"{base_name}_gpt_structured_result.json"
             )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
