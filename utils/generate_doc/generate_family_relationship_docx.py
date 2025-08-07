@@ -39,7 +39,7 @@ def set_label_table_width(table, width=2000):
     tcPr.append(tcW)
 
 
-def generate_family_relationship_docx(json_path: str) -> Document:
+def generate_family_relationship_docx(json_path: str, lang: str) -> Document:
     doc = Document()
 
     # 제목
@@ -214,3 +214,5 @@ def generate_family_relationship_docx(json_path: str) -> Document:
     note3.alignment = WD_ALIGN_PARAGRAPH.LEFT
     note3.paragraph_format.line_spacing = 1
     note2.paragraph_format.space_before = Pt(0)
+
+    return doc
