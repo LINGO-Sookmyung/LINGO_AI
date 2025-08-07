@@ -36,27 +36,31 @@ def get_prompts_by_doc_type(doc_type:str) -> tuple[str,str]:
             """
             예시:
             {
-            "partialCertificateOfRegistry": {
-                "typeOfRegistration": "건물",
-                "serialNumber": "...",
-                "address": "...",
-                "partOfTitle": {
+            "documentType": "등기사항일부증명서(현재 소유현황)",
+            "typeOfRegistration": "건물",
+            "serialNumber": "...",
+            "address": "...",
+            "partOfTitle": {
+                "header": "【표제부】(건물의 표시)",
+                "columns": ["표시번호", "접수", "소재지번, 건물명칭 및 번호", "건물내역","등기원인 및 기타사항"]
                 "descriptionNo": "1",
                 "acceptance": "2011년 4월 23일",
                 "location": "...",
                 "buildingDetails": "...",
                 "causeOfRegistrationAndOtherInformation": "..."
-                },
-                "owner": {
+            },
+            "owner": {
+                "header": "【명의인】",
+                "columns": ["등기명의인","(주민)등록번호", "최종지분","주소","순위번호"]
                 "registeredOwner": "...",
                 "registrationNumber": "...",
                 "finalShare": "..."
                 "ownerAddress": "..."
                 "priorityNumber": "..."
-                },
-                "competentRegistryOffice": "...",
-                "dateOfIssue": "...",
-                "remarks": [
+            },
+            "competentRegistryOffice": "...",
+            "dateOfIssue": "...",
+            "remarks": [
                 "[ 참 고 사 항 ]\n
                 가. 등기기록에서 유효한 지분을 가진 소유자 혹은 공유자 현황을 표시합니다.
                 나. 최종지분은 등기명의인이 가진 최종지분이며, 2개 이상의 순위번호에 지분을 가진 경우 그 지분을 합산하였습니다.
@@ -64,8 +68,7 @@ def get_prompts_by_doc_type(doc_type:str) -> tuple[str,str]:
                 라. 신청사항과 관련이 없는 소유권(갑구)과 소유권 이외의 권리(을구)사항은 표시되지 않았습니다.
                 마. 지분이 통분되어 공시된 경우는 전체의 지분을 통분하여 공시한 것입니다.
                 * 실선으로 그어진 부분은 말소사항을 표시함. * 기록사항 없는 갑구, 을구는 ‘기록사항 없음’으로 표시함."
-                ]
-            }
+                ] 
             }
             """
         )
