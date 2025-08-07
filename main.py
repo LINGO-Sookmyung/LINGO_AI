@@ -7,10 +7,14 @@ import json
 import zipfile
 import shutil
 import uuid
+from docx import Document
 from utils.image_processing import binarize_image
 from utils.ocr_client import call_ocr
 from utils.gpt_client import call_gpt_for_structured_json
 from utils.translate_gpt_client import call_gpt_for_translate_json
+from utils.generate_doc.generate_building_registry_docx import generate_building_registry_docx
+from utils.generate_doc.generate_enrollment_certificate_docx import generate_enrollment_certificate_docx
+from utils.generate_doc.generate_family_relationship_docx import generate_family_relationship_docx
 
 app = FastAPI()
 
@@ -21,6 +25,12 @@ class MultiImagePathRequest(BaseModel):
 class JsonPathRequest(BaseModel):
     json_path: str
     lang: str
+
+class CreateDocRequest(BaseModel):
+    doc_type:str
+    json_path:str
+    ocr_path:str
+    lang:str
 
 def delete_directory(path: str):
     shutil.rmtree(path)
@@ -112,3 +122,30 @@ def translate (request: JsonPathRequest):
                 media_type="application/json",
                 filename=f"{base_name}_gpt_translate_result.json"
             )
+
+@app.post("/generate-doc")
+def generate_doc (request: CreateDocRequest):
+    if request.doc_type == "부동산등기부등본":
+        dpc = generate_building_registry_docx(request.json_path, request.ocr_path, request.lang)
+    elif request.doc_type == "가족관계증명서":
+        doc = generate_family_relationship_docx(request.json_path, request.lang)
+    elif request.doc_type == "재학증명서":
+        doc = generate_enrollment_certificate_docx(request.json_path, request.lang)
+    else:
+        raise ValueError("지원하지 않는 문서 유형입니다.")
+
+    session_id = str(uuid.uuid4())
+    temp_path = os.path.join("translated_outputs", session_id)
+    os.makedirs(temp_path, exist_ok=True)
+    base_name = os.path.splitext(os.path.basename(request.json_path))[0]  # 파일명 추출
+
+    # 임시 파일로 저장
+    with NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
+        temp_path = tmp.name
+        doc.save(temp_path)
+
+    return FileResponse(
+        path=temp_path,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filename=f"{base_name}_translated.docx"
+    )

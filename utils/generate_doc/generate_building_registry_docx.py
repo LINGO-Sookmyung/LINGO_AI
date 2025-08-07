@@ -4,7 +4,7 @@ import json
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.shared import Pt
 
-def generate_building_registry_docx(json_path: str, ocr_path: str) -> Document:
+def generate_building_registry_docx(json_path: str, ocr_path: str, lang: str) -> Document:
     # OCR 결과 불러오기
     with open(ocr_path, encoding="utf-8") as f:
         data = json.load(f)
@@ -16,12 +16,33 @@ def generate_building_registry_docx(json_path: str, ocr_path: str) -> Document:
 
     doc = Document()  # 문서 객체 생성
 
+    if lang=="일본어" and lang =="중국어"
+        serial_number_label = "固有番号"
+        date_of_issue_labal = "交付日"
+        competent_registry_Office_label = "管轄登記所"
+        blank_notice_label = "以下余白"
+    elif lang=="중국어"
+        serial_number_label = "固有番号"
+        date_of_issue_labal = "发证日期"
+        competent_registry_Office_label = "管辖登记机关"
+        blank_notice_label = "以下为空白"
+    elif lang=="베트남어"
+        serial_number_label = "Số định danh"
+        date_of_issue_labal = "Ngày cấp"
+        competent_registry_Office_label = "Cơ quan đăng ký có thẩm quyền"
+        blank_notice_label = "Phần còn lại của trang này để trống"
+    else:
+        serial_number_label = "Serial Number"
+        date_of_issue_labal = "Date Of Issue"
+        competent_registry_Office_label = "Competent Registry Office"
+        blank_notice_label = "Nothing follows"
+
     # === 문서 상단 텍스트 (표 위에) 추가 ===
     headings = [
-        ("Partial Certificate of Registry (Current Ownership Status)", 16, True, WD_PARAGRAPH_ALIGNMENT.CENTER),
-        (f"- Building -", 16, True, WD_PARAGRAPH_ALIGNMENT.CENTER),
-        (f"Serial Number {replacements.serialNumber}", 11, False, WD_PARAGRAPH_ALIGNMENT.RIGHT),
-        (f"[Building] {replacements.address}", 11, False, WD_PARAGRAPH_ALIGNMENT.LEFT)
+        (f"{replacements.documentType}", 16, True, WD_PARAGRAPH_ALIGNMENT.CENTER),
+        (f"- {replacements.typeOfRegistration} -", 16, True, WD_PARAGRAPH_ALIGNMENT.CENTER),
+        (f"{serial_number_label} {replacements.serialNumber}", 11, False, WD_PARAGRAPH_ALIGNMENT.RIGHT),
+        (f"[{replacements.typeOfRegistration}] {replacements.address}", 11, False, WD_PARAGRAPH_ALIGNMENT.LEFT)
     ]
 
     for text, size, bold, align in headings:
@@ -119,11 +140,11 @@ def generate_building_registry_docx(json_path: str, ocr_path: str) -> Document:
             doc.add_paragraph()  # 테이블 간 간격
 
     # === 문서 하단 텍스트 (표 아래에) 추가 ===
-    p = doc.add_paragraph("-- Nothing follows --")
+    p = doc.add_paragraph(f"-- {blank_notice_label} --")
     p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
     # 관할등기소 오른쪽 정렬
-    p = doc.add_paragraph(f"Competent Registry Office {서울서부지방법원 등기국}")
+    p = doc.add_paragraph(f"{competent_registry_Office_label} {서울서부지방법원 등기국}")
     p.alignment = WD_PARAGRAPH_ALIGNMENT.RIGHT
 
     # 참고사항 (작은 폰트 적용)
@@ -137,9 +158,7 @@ def generate_building_registry_docx(json_path: str, ocr_path: str) -> Document:
         run.font.size = Pt(9)
 
     # 하단
-    doc.add_paragraph(f"Date of Issue : {"2025년07월17일 20시29분47초"}")
+    doc.add_paragraph(f"{date_of_issue_label} : {"2025년07월17일 20시29분47초"}")
 
 
-    # === 최종 저장 ===
-    output_path = "outputs/building_registry.docx"
-    doc.save(output_path)
+    return doc

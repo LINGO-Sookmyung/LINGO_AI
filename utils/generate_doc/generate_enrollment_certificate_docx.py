@@ -40,7 +40,7 @@ def replace_in_runs(paragraphs, replacements):
         else:
             para.add_run(buffer)
 
-def generate_enrollment_certificate_docx(json_path: str) -> Document:
+def generate_enrollment_certificate_docx(json_path: str, lang: str) -> Document:
     # JSON 로드
     with open(json_path, 'r', encoding='utf-8') as f:
         raw_data = json.load(f)
@@ -56,6 +56,4 @@ def generate_enrollment_certificate_docx(json_path: str) -> Document:
     for section in doc.sections:
         replace_in_runs(section.header.paragraphs)
 
-    # 저장
-    output_path = "outputs/enrollment_certificate.docx"
-    doc.save(output_path)
+    return doc
