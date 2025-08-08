@@ -8,6 +8,7 @@ import zipfile
 import shutil
 import uuid
 from docx import Document
+from tempfile import NamedTemporaryFile
 from utils.image_processing import binarize_image
 from utils.ocr_client import call_ocr
 from utils.gpt_client import call_gpt_for_structured_json
@@ -126,7 +127,7 @@ def translate (request: JsonPathRequest):
 @app.post("/generate-doc")
 def generate_doc (request: CreateDocRequest):
     if request.doc_type == "부동산등기부등본":
-        dpc = generate_building_registry_docx(request.json_path, request.ocr_path, request.lang)
+        doc = generate_building_registry_docx(request.json_path, request.ocr_path, request.lang)
     elif request.doc_type == "가족관계증명서":
         doc = generate_family_relationship_docx(request.json_path, request.lang)
     elif request.doc_type == "재학증명서":
