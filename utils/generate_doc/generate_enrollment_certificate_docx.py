@@ -1,59 +1,70 @@
 from docx import Document
 import json
-from utils.generate_doc.flatten_json import flatten_json
+import re
 
-# === 스타일 유지하며 run 내부 치환 ===
+def has_drawing(run):
+    """run 안에 도형(w:drawing, w:pict)이 있는지 확인"""
+    return bool(run._element.xpath('.//w:drawing') or run._element.xpath('.//w:pict'))
+
 def replace_in_runs(paragraphs, replacements):
     for para in paragraphs:
-        buffer = ""
-        new_runs = []
-        style_info = []
+        if not para.runs:
+            continue
 
-        # 1. 기존 run 정보 수집
+        # 도형이 있는 run과 없는 run을 분리
+        text_runs = []
+        drawing_runs = []
         for run in para.runs:
-            buffer += run.text
-            style_info.append({
-                "style": run.style,
-                "size": run.font.size,
-                "bold": run.bold,
-                "italic": run.italic,
-                "underline": run.underline
-            })
-            new_runs.append(run)
+            if has_drawing(run):
+                drawing_runs.append(run)
+            else:
+                text_runs.append(run)
 
-        # 2. {{key}} -> value 치환
+        # 텍스트 run들을 합쳐서 치환
+        buffer = "".join(r.text for r in text_runs)
         for key, val in replacements.items():
-            buffer = buffer.replace(f"{{{{{key}}}}}", str(val))  # {{}} escape
+            buffer = re.sub(
+                r"\{\{\s*" + re.escape(key) + r"\s*\}\}",  # {{ key }} 공백 허용
+                str(val),
+                buffer
+            )
 
-        # 3. 기존 run 제거
-        for run in new_runs:
+        # 기존 텍스트 run 제거
+        for run in text_runs:
             para._element.remove(run._element)
 
-        # 4. 새 run 삽입 (첫 run 스타일 유지)
-        if style_info:
-            run = para.add_run(buffer)
-            run.style = style_info[0]["style"]
-            run.font.size = style_info[0]["size"]
-            run.bold = style_info[0]["bold"]
-            run.italic = style_info[0]["italic"]
-            run.underline = style_info[0]["underline"]
-        else:
-            para.add_run(buffer)
+        # 새 텍스트 run 삽입 (첫 run 스타일 유지)
+        if text_runs:
+            first_style = text_runs[0]
+            new_run = para.add_run(buffer)
+            new_run.style = first_style.style
+            new_run.font.size = first_style.font.size
+            new_run.bold = first_style.bold
+            new_run.italic = first_style.italic
+            new_run.underline = first_style.underline
+
+        # 도형 run은 원래 순서 유지하면서 다시 붙이기
+        for run in drawing_runs:
+            para._element.append(run._element)
 
 def generate_enrollment_certificate_docx(json_path: str, lang: str) -> Document:
     # JSON 로드
     with open(json_path, 'r', encoding='utf-8') as f:
-        raw_data = json.load(f)
-        replacements = flatten_json(raw_data)
+        replacements = json.load(f)
 
-    # 문서 열기
-    doc = Document("sample/template_enrollment_certificate.docx")
-
+    if lang=="일본어":
+        doc = Document("templates/japanese_template_enrollment_certificate.docx")
+    elif lang=="중국어":
+        doc = Document("templates/chinese_template_enrollment_certificate.docx")
+    elif lang=="베트남어":
+        doc = Document("templates/vietnamese_template_enrollment_certificate.docx")
+    else:
+        doc = Document("templates/english_template_enrollment_certificate.docx")
     # 본문
-    replace_in_runs(doc.paragraphs)
+    replace_in_runs(doc.paragraphs, replacements)
 
     # 머리말
     for section in doc.sections:
-        replace_in_runs(section.header.paragraphs)
+        replace_in_runs(section.header.paragraphs, replacements)
 
     return doc
