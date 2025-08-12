@@ -1,8 +1,6 @@
 from docx import Document
 import json
 import re
-from utils.generate_doc.flatten_json import flatten_json
-import re
 
 def has_drawing(run):
     """run 안에 도형(w:drawing, w:pict)이 있는지 확인"""
@@ -52,8 +50,7 @@ def replace_in_runs(paragraphs, replacements):
 def generate_enrollment_certificate_docx(json_path: str, lang: str) -> Document:
     # JSON 로드
     with open(json_path, 'r', encoding='utf-8') as f:
-        raw_data = json.load(f)
-        replacements = flatten_json(raw_data)
+        replacements = json.load(f)
 
     if lang=="일본어":
         doc = Document("templates/japanese_template_enrollment_certificate.docx")
