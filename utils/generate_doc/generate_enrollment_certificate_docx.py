@@ -55,9 +55,14 @@ def generate_enrollment_certificate_docx(json_path: str, lang: str) -> Document:
         raw_data = json.load(f)
         replacements = flatten_json(raw_data)
 
-    # 문서 열기
-    doc = Document("templates/template_enrollment_certificate.docx")
-
+    if lang=="일본어":
+        doc = Document("templates/japanese_template_enrollment_certificate.docx")
+    elif lang=="중국어":
+        doc = Document("templates/chinese_template_enrollment_certificate.docx")
+    elif lang=="베트남어":
+        doc = Document("templates/vietnamese_template_enrollment_certificate.docx")
+    else:
+        doc = Document("templates/english_template_enrollment_certificate.docx")
     # 본문
     replace_in_runs(doc.paragraphs, replacements)
 
