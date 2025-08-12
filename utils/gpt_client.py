@@ -91,72 +91,72 @@ def get_prompts_by_doc_type(doc_type:str) -> tuple[str,str]:
             """
             예시:
             {
-                "certificateOfFamilyRelationsGeneral": {
-                    "documentType": "가족관계증명서(일반)",
-                    "placeOfFamilyRegistration": "서울특별시 중구 세종대로 100",
-                    "dateOfIssue": "2025-07-18",
-                    "timeOfIssue": "14:54",
-                    "applicant": "김가영",
-                    "certificateNumber": "9192-2003-5983-1870",
-                    "registrant": {
+                "documentType": "가족관계증명서(일반)",
+                "placeOfFamilyRegistration": "서울특별시 중구 세종대로 100",
+                "dateOfIssue": "2025-07-18",
+                "timeOfIssue": "14:54",
+                "applicant": "김가영",
+                "certificateNumber": "9192-2003-5983-1870",
+                "columns": ["구분", "성명", "출생연월일", "주민등록번호", "성별", "본"]
+                "registrant": {
+                    "category": "본인",
                     "fullName": "김가영(金佳榮)",
                     "dateOfBirth": "2000-08-12",
                     "residentRegistrationNumber": "000812-4******",
-                    "gender": "여",
-                    "bonName": "金海"
+                    "sex": "여",
+                    "originOfSurname": "金海"
+                },
+                "familyMembers": [
+                    {
+                        "category": "부",
+                        "fullName": "김철수(金哲洙)",
+                        "dateOfBirth": "1970-05-10",
+                        "residentRegistrationNumber": "700510-1******",
+                        "sex": "남",
+                        "originOfSurname": "金海"
                     },
-                    "familyMembers": [
-                        {
-                            "relation": "부",
-                            "fullName": "김철수(金哲洙)",
-                            "dateOfBirth": "1970-05-10",
-                            "residentRegistrationNumber": "700510-1******",
-                            "gender": "남",
-                            "bonName": "金海"
-                        },
-                        {
-                            "relation": "모",
-                            "fullName": "이영희(李英姬)",
-                            "dateOfBirth": "1972-09-28",
-                            "residentRegistrationNumber": "720928-2******",
-                            "gender": "여",
-                            "bonName": "全州"
-                        },
-                        {
-                            "relation": "배우자",
-                            "fullName": "박동수(朴東洙)",
-                            "dateOfBirth": "1999-03-23",
-                            "residentRegistrationNumber": "990323-3******",
-                            "gender": "남",
-                            "bonName": "密陽"
-                        },
-                        {
-                            "relation": "자녀",
-                            "fullName": "박지우(朴智雨)",
-                            "dateOfBirth": "2022-11-01",
-                            "residentRegistrationNumber": "221101-4******",
-                            "gender": "여",
-                            "bonName": "密陽"
-                        },
-                        {
-                            "relation": "자녀",
-                            "fullName": "박하준(朴河準)",
-                            "dateOfBirth": "2024-02-14",
-                            "residentRegistrationNumber": "240214-1******",
-                            "gender": "남",
-                            "bonName": "密陽"
-                        }
-                        ],
-                        "issuingAuthority": {
-                        "organization": "법원행정처 전산정보중앙관리소",
-                        "authorizedOfficer": "전산운영책임관 박준우"
-                        },
-                        "remarks": [
-                        "위 가족관계증명서(일반)는 가족관계등록부의 기록사항과 틀림없음을 증명합니다.",
-                        "위 증명서는 「가족관계의 등록 등에 관한 법률」 제15조제2항에 따른 등록사항을 전출한 일반증명서입니다.",
-                        "전자 가족관계등록시스템(https://efamily.scourt.go.kr)의 증명서 진위확인 메뉴에서 발급일로부터 3개월까지 위변조 여부를 확인할 수 있습니다."
-                        ]
+                    {
+                        "category": "모",
+                        "fullName": "이영희(李英姬)",
+                        "dateOfBirth": "1972-09-28",
+                        "residentRegistrationNumber": "720928-2******",
+                        "sex": "여",
+                        "originOfSurname": "全州"
+                    },
+                    {
+                        "category": "배우자",
+                        "fullName": "박동수(朴東洙)",
+                        "dateOfBirth": "1999-03-23",
+                        "residentRegistrationNumber": "990323-3******",
+                        "sex": "남",
+                        "originOfSurname": "密陽"
+                    },
+                    {
+                        "category": "자녀",
+                        "fullName": "박지우(朴智雨)",
+                        "dateOfBirth": "2022-11-01",
+                        "residentRegistrationNumber": "221101-4******",
+                        "sex": "여",
+                        "originOfSurname": "密陽"
+                    },
+                    {
+                        "category": "자녀",
+                        "fullName": "박하준(朴河準)",
+                        "dateOfBirth": "2024-02-14",
+                        "residentRegistrationNumber": "240214-1******",
+                        "sex": "남",
+                        "originOfSurname": "密陽"
                     }
+                    ],
+                    "issuingAuthority": {
+                    "organization": "법원행정처 전산정보중앙관리소",
+                    "authorizedOfficer": "전산운영책임관 박준우"
+                    },
+                    "remarks": [
+                    "위 가족관계증명서(일반)는 가족관계등록부의 기록사항과 틀림없음을 증명합니다.",
+                    "위 증명서는 「가족관계의 등록 등에 관한 법률」 제15조제2항에 따른 등록사항을 전출한 일반증명서입니다.",
+                    "전자 가족관계등록시스템(https://efamily.scourt.go.kr)의 증명서 진위확인 메뉴에서 발급일로부터 3개월까지 위변조 여부를 확인할 수 있습니다."
+                    ]
                 }
             """
         )
