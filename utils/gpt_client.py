@@ -181,12 +181,10 @@ def get_prompts_by_doc_type(doc_type:str) -> tuple[str,str]:
                 "authenticationNo": "",
                 "receiver": "",
                 "use": "",
-                "certificateOfEnrollment": {
-                    "fullName": "",
-                    "dateOfBirth": "",
-                    "major": "",
-                    "grade": ""
-                },
+                "fullName": "",
+                "dateOfBirth": "",
+                "major": "",
+                "grade": "",
                 "dateOfIssue": "",
                 "universityName": "",
                 "authorizedOfficer": "",
