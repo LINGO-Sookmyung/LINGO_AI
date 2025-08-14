@@ -14,6 +14,7 @@ from utils.ocr_client import call_ocr
 from utils.gpt_client import call_gpt_for_structured_json
 from utils.translate_gpt_client import call_gpt_for_translate_json
 from utils.generate_doc.generate_building_registry_docx import generate_building_registry_docx
+from utils.generate_doc.generate_building_registry_docx_simple import generate_building_registry_docx_simple
 from utils.generate_doc.generate_enrollment_certificate_docx import generate_enrollment_certificate_docx
 from utils.generate_doc.generate_family_relationship_docx import generate_family_relationship_docx
 
@@ -49,7 +50,7 @@ def binarize_and_ocr_multi(request: MultiImagePathRequest, background_tasks: Bac
         for path in request.image_paths:
             base_name = os.path.basename(path).split('.')[0]
             binary_path = binarize_image(path, output_dir)
-            result_path = os.path.join(output_dir, f"{base_name}_result.json")
+            result_path = os.path.join(output_dir, f"{base_name}__{session_id}_result.json")
 
             entry = {
                 "original_image": path,
@@ -58,7 +59,7 @@ def binarize_and_ocr_multi(request: MultiImagePathRequest, background_tasks: Bac
 
             # doc_type이 부동산등기부등본인 경우에만 OCR 수행
             if request.doc_type == "부동산등기부등본":
-                result_path = os.path.join(output_dir, f"{base_name}_result.json")
+                result_path = os.path.join(output_dir, f"{base_name}__{session_id}_result.json")
                 result = call_ocr(binary_path, result_path)
                 entry["ocr_json_file"] = result_path
                 entry["ocr_result"] = result
@@ -68,22 +69,22 @@ def binarize_and_ocr_multi(request: MultiImagePathRequest, background_tasks: Bac
 
         # GPT 결과 호출
         gpt_json_result = call_gpt_for_structured_json(image_paths_for_gpt, request.doc_type)
-        gpt_result_path = os.path.join(output_dir, f"{base_name}_gpt_structured_result.json")
+        gpt_result_path = os.path.join(output_dir, f"{base_name}__{session_id}_gpt_structured_result.json")
         with open(gpt_result_path, 'w', encoding='utf-8') as f:
             f.write(gpt_json_result)
 
         # 결과 저장 및 반환 방식 분기
         if request.doc_type == "부동산등기부등본":
             # OCR 결과도 합쳐서 저장
-            ocr_merged_path = os.path.join(output_dir, f"{base_name}_ocr_results.json")
+            ocr_merged_path = os.path.join(output_dir, f"{base_name}__{session_id}_ocr_results.json")
             with open(ocr_merged_path, 'w', encoding='utf-8') as f:
                 json.dump(results, f, indent=2, ensure_ascii=False)
 
             # Zip으로 묶음
-            zip_path = os.path.join(output_dir, f"{base_name}_ocr_and_gpt_results.zip")
+            zip_path = os.path.join(output_dir, f"{base_name}__{session_id}_ocr_and_gpt_results.zip")
             with zipfile.ZipFile(zip_path, 'w') as zipf:
-                zipf.write(ocr_merged_path, arcname=f"{base_name}_ocr_results.json")
-                zipf.write(gpt_result_path, arcname=f"{base_name}_gpt_structured_result.json")
+                zipf.write(ocr_merged_path, arcname=f"{base_name}__{session_id}_ocr_results.json")
+                zipf.write(gpt_result_path, arcname=f"{base_name}__{session_id}_gpt_structured_result.json")
             
             # 요청 끝나고 디렉토리 삭제 예약
             background_tasks.add_task(delete_directory, output_dir)
@@ -91,7 +92,7 @@ def binarize_and_ocr_multi(request: MultiImagePathRequest, background_tasks: Bac
             return FileResponse(
                 path=zip_path,
                 media_type="application/zip",
-                filename=f"{base_name}_ocr_and_gpt_results.zip"
+                filename=f"{base_name}__{session_id}_ocr_and_gpt_results.zip"
             )
         else:
             # 요청 끝나고 디렉토리 삭제 예약
@@ -101,27 +102,27 @@ def binarize_and_ocr_multi(request: MultiImagePathRequest, background_tasks: Bac
             return FileResponse(
                 path=gpt_result_path,
                 media_type="application/json",
-                filename=f"{base_name}_gpt_structured_result.json"
+                filename=f"{base_name}__{session_id}_gpt_structured_result.json"
             )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/translate")
 def translate (request: JsonPathRequest):
-    base_name = os.path.basename(request.json_path).split('.')[0]
+    base_name = os.path.basename(request.json_path).split('.')[0].split('__')[0]
     session_id = str(uuid.uuid4())
     output_dir = os.path.join("outputs", session_id)
     os.makedirs(output_dir, exist_ok=True)
     
     gpt_json_result = call_gpt_for_translate_json(request.json_path, request.lang)
-    gpt_result_path = os.path.join(output_dir, f"{base_name}_gpt_translate_result.json")
+    gpt_result_path = os.path.join(output_dir, f"{base_name}__{session_id}_gpt_translate_result.json")
     with open(gpt_result_path, 'w', encoding='utf-8') as f:
         f.write(gpt_json_result)
 
     return FileResponse(
                 path=gpt_result_path,
                 media_type="application/json",
-                filename=f"{base_name}_gpt_translate_result.json"
+                filename=f"{base_name}__{session_id}_gpt_translate_result.json"
             )
 
 @app.post("/generate-doc")
@@ -138,7 +139,7 @@ def generate_doc (request: CreateDocRequest):
     session_id = str(uuid.uuid4())
     temp_path = os.path.join("translated_outputs", session_id)
     os.makedirs(temp_path, exist_ok=True)
-    base_name = os.path.splitext(os.path.basename(request.json_path))[0]  # 파일명 추출
+    base_name = os.path.splitext(os.path.basename(request.json_path))[0].split('__')[0]  # 파일명 추출
 
     # 임시 파일로 저장
     with NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
@@ -148,5 +149,5 @@ def generate_doc (request: CreateDocRequest):
     return FileResponse(
         path=temp_path,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        filename=f"{base_name}_translated.docx"
+        filename=f"{base_name}__{session_id}_translated.docx"
     )
