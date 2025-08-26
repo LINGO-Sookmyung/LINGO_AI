@@ -1,51 +1,100 @@
 from dotenv import load_dotenv
 import os
+import json
+import time
+import uuid
+import mimetypes
+import requests
+from pathlib import Path
+from typing import Iterable, List, Union
 
-load_dotenv()  # .env 파일 로드
+load_dotenv()  # .env 로드
+ 
+INVOKE_URL = os.getenv("INVOKE_URL")         
+OCR_SECRET = os.getenv("X_OCR_SECRET")
 
-invoke_url = os.getenv("INVOKE_URL")
-ocr_secret = os.getenv("X-OCR-SECRET")
+def _guess_format_and_mime(p: Path):
+    ext = p.suffix.lower().lstrip(".") or "jpg"
+    mime, _ = mimetypes.guess_type(str(p))
+    if not mime:
+        # 기본값
+        mime = "image/jpeg" if ext in ("jpg", "jpeg") else "image/png"
+        
+    fmt = "jpg" if ext == "jpeg" else ext
+    return fmt, mime
 
-def call_ocr(image_path: str, save_json_path: str) -> dict:
-    import uuid, time, json, requests, os
+def call_ocr(
+    image_paths: Union[str, Path, Iterable[Union[str, Path]]],
+    save_json_path: Union[str, Path],
+    timeout_sec: int = 60
+) -> dict:
 
-    # OCR 요청에 필요한 메타데이터 구성
-    # 'images': 분석할 이미지 파일 정보 (format, name)
-    # 'requestId': 요청을 식별할 고유 ID
-    # 'version': API 버전
-    # 'enableTableDetection': 표 구조 인식 활성화 여부
-    # 'timestamp': 현재 시간 (밀리초 단위)
-    request_json = {
-        'images': [{'format': 'png', 'name': 'demo'}],
-        'requestId': str(uuid.uuid4()),
-        'version': 'V2',
-        'enableTableDetection': 'true',
-        'timestamp': int(round(time.time() * 1000))
+    if not INVOKE_URL or not OCR_SECRET:
+        raise RuntimeError("INVOKE_URL 또는 X-OCR-SECRET 환경변수가 비어 있습니다.")
+
+    # image_paths를 리스트로 변경
+    if isinstance(image_paths, (str, Path)):
+        paths: List[Path] = [Path(image_paths)]
+    else:
+        paths = [Path(p) for p in image_paths]
+
+    if not paths:
+        raise ValueError("image_paths가 비었습니다.")
+
+    # message 구성
+    images_meta = []
+    for i, p in enumerate(paths):
+        fmt, _ = _guess_format_and_mime(p)
+        images_meta.append({"format": fmt, "name": f"page-{i+1}"})
+
+    message = {
+        "version": "V2",
+        "requestId": str(uuid.uuid4()),
+        "timestamp": int(time.time() * 1000),
+        "images": images_meta,
+        "enableTableDetection": True,
     }
 
-    # 요청 본문(payload) 생성
-    # message 필드에 JSON 문자열을 UTF-8로 인코딩해서 포함
-    payload = {'message': json.dumps(request_json).encode('UTF-8')}
+    # files 배열 구성
+    files = []
+    file_objs = []
+    try:
+        for p in paths:
+            fmt, mime = _guess_format_and_mime(p)
+            f = open(p, "rb")
+            file_objs.append(f)
+            files.append(
+                ("file", (p.name, f, mime))
+            )
 
-    # 이미지 파일을 multipart 형식으로 전송하기 위해 준비
-    # ('file', 파일객체) 튜플을 리스트 형태로 전달
-    files = [('file', open(image_path, 'rb'))]
+        headers = {"X-OCR-SECRET": OCR_SECRET}
+        data = {"message": json.dumps(message, ensure_ascii=False)}
 
-    # 요청 헤더에 비밀 키 포함 (CLOVA OCR 인증용)
-    headers = {'X-OCR-SECRET': ocr_secret}
+        resp = requests.post(
+            INVOKE_URL,
+            headers=headers,
+            data=data,           
+            files=files,         
+            timeout=timeout_sec
+        )
 
-    # OCR API로 POST 요청 전송
-    response = requests.post(invoke_url, headers=headers, data=payload, files=files)
+        if resp.status_code >= 400:
+            raise requests.HTTPError(
+                f"CLOVA OCR {resp.status_code}: {resp.text}",
+                response=resp
+            )
 
-    # 요청 실패 시 예외 발생 (4xx, 5xx)
-    response.raise_for_status()
+        result = resp.json()
 
-    # 응답 본문(JSON)을 파이썬 dict로 파싱
-    result = response.json()
+        save_path = Path(save_json_path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        save_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # 응답 결과를 JSON 파일로 저장
-    with open(save_json_path, 'w', encoding='utf-8') as f:
-        json.dump(result, f, indent=2, ensure_ascii=False)
+        return result
 
-    # 결과 dict 반환 (파일 저장 + 메모리 반환)
-    return result
+    finally:
+        for f in file_objs:
+            try:
+                f.close()
+            except Exception:
+                pass
