@@ -1,7 +1,5 @@
-# utils/gpt_structure_from_ocr.py
 import json
 import os
-import re
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 import openai
