@@ -5,10 +5,8 @@ from typing import List
 import traceback
 import os
 import json
-import zipfile
 import shutil
 import uuid
-from docx import Document
 from fastapi.staticfiles import StaticFiles
 from tempfile import NamedTemporaryFile
 from utils.image_processing import binarize_image
@@ -16,79 +14,17 @@ from utils.ocr_client import call_ocr
 from utils.gpt_client import call_gpt_for_structured_json
 from utils.s3_http_downloader import ensure_local
 from utils.translate_gpt_client import call_gpt_for_translate_json
-#from utils.generate_doc.generate_building_registry_docx import generate_building_registry_docx
-from utils.generate_doc.generate_building_registry_docx_copy import generate_building_registry_docx
+from utils.generate_doc.generate_building_registry_docx import generate_building_registry_docx
 from utils.generate_doc.generate_enrollment_certificate_docx import generate_enrollment_certificate_docx
 from utils.generate_doc.generate_family_relationship_docx import generate_family_relationship_docx
 from pydantic import BaseModel
 from utils.gpt_structure_from_ocr import call_gpt_for_structured_from_ocr
+from fastapi.responses import FileResponse
+
 app = FastAPI()
 os.makedirs("outputs", exist_ok=True)
 app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
-from fastapi.responses import FileResponse
-
-@app.get("/outputs/{uuid}/{filename}")
-def get_output_file(uuid: str, filename: str):
-    file_path = f"outputs/{uuid}/{filename}"
-    return FileResponse(file_path, media_type="application/json")
-class GptStructureRequest(BaseModel):
-    ocr_path: str
-    doc_type: str
-
-'''@app.post("/gpt-structure")
-def gpt_structure(request: GptStructureRequest):
-    try:
-        # OCR 결과 파일 경로 (이미 존재하는 merged_results.json)
-        ocr_path = request.ocr_path  
-        with open(ocr_path, "r", encoding="utf-8") as f:
-            ocr_data = json.load(f)
-
-        # GPT 호출 (OCR JSON을 템플릿 dict로 변환)
-        gpt_json_result = call_gpt_for_structured_json(
-            [item["original_image"] for item in ocr_data], 
-            request.doc_type
-        )
-
-        # 결과 저장
-        base_name = os.path.splitext(os.path.basename(ocr_path))[0]
-        session_id = str(uuid.uuid4())
-        output_dir = os.path.join("outputs", session_id)
-        os.makedirs(output_dir, exist_ok=True)
-
-        gpt_result_path = os.path.join(output_dir, f"{base_name}_gpt_structured.json")
-        with open(gpt_result_path, "w", encoding="utf-8") as f:
-            f.write(gpt_json_result)
-
-        return {"path": gpt_result_path}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-        '''
-
-@app.post("/gpt-structure")
-def gpt_structure(request: GptStructureRequest):
-    try:
-        # 1) OCR 리스트 로드 (여러 페이지)
-        with open(request.ocr_path, "r", encoding="utf-8") as f:
-            ocr_data = json.load(f)
-        if not isinstance(ocr_data, list):
-            raise ValueError("ocr_path 파일 형식이 리스트가 아닙니다. merged_results.json을 전달하세요.")
-
-        # 2) OCR 요약을 GPT에 전달하여 구조화(dict) 생성 (누락 방지)
-        gpt_json_result = call_gpt_for_structured_from_ocr(ocr_data, request.doc_type)
-
-        # 3) 저장
-        base = os.path.splitext(os.path.basename(request.ocr_path))[0]
-        sid = str(uuid.uuid4())
-        outdir = os.path.join("outputs", sid); os.makedirs(outdir, exist_ok=True)
-        out_path = os.path.join(outdir, f"{base}_gpt_structured.json")
-        with open(out_path, "w", encoding="utf-8") as f:
-            f.write(gpt_json_result)
-
-        return {"path": out_path}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    
-
+ 
 
 class MultiImagePathRequest(BaseModel):
     image_paths: List[str]  # 여러 이미지 경로 리스트
@@ -104,9 +40,23 @@ class CreateDocRequest(BaseModel):
     ocr_path:str
     lang:str
 
+# 디렉터리 삭제
 def delete_directory(path: str):
     shutil.rmtree(path)
 
+
+#웹에서 파일 내용 확인용
+@app.get("/outputs/{uuid}/{filename}")
+def get_output_file(uuid: str, filename: str):
+    file_path = f"outputs/{uuid}/{filename}"
+    return FileResponse(file_path, media_type="application/json")
+class GptStructureRequest(BaseModel):
+    ocr_path: str
+    doc_type: str
+
+
+
+ #이진화 + OCR + GPT 구조화 (부동산등기부등본/가족관계증명서/재학증명서)
 @app.post("/binarize-and-ocr-multi")
 def binarize_and_ocr_multi(request: MultiImagePathRequest):
     print("image_paths:", request.image_paths)
@@ -124,7 +74,7 @@ def binarize_and_ocr_multi(request: MultiImagePathRequest):
             local_input_path = ensure_local(p, output_dir)
             base_name = os.path.splitext(os.path.basename(local_input_path))[0]
 
-            # 1) 이진화
+            # 이진화
             binary_path = binarize_image(local_input_path, output_dir)
 
             result_item = {
@@ -169,7 +119,35 @@ def binarize_and_ocr_multi(request: MultiImagePathRequest):
         tb = traceback.format_exc()
         print("ERROR in /binarize-and-ocr-multi:", tb)
         raise HTTPException(status_code=500, detail=tb)
+    
 
+#부동산등기부등본 구조화
+@app.post("/gpt-structure")
+def gpt_structure(request: GptStructureRequest):
+    try:
+        # 여러페이지인 경우
+        with open(request.ocr_path, "r", encoding="utf-8") as f:
+            ocr_data = json.load(f)
+        if not isinstance(ocr_data, list):
+            raise ValueError("ocr_path 파일 형식이 리스트가 아닙니다. merged_results.json을 전달하세요.")
+
+        # OCR 요약을 GPT에 전달하여 dict 생성
+        gpt_json_result = call_gpt_for_structured_from_ocr(ocr_data, request.doc_type)
+
+        # 저장
+        base = os.path.splitext(os.path.basename(request.ocr_path))[0]
+        sid = str(uuid.uuid4())
+        outdir = os.path.join("outputs", sid); os.makedirs(outdir, exist_ok=True)
+        out_path = os.path.join(outdir, f"{base}_gpt_structured.json")
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(gpt_json_result)
+
+        return {"path": out_path}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+#변역
 @app.post("/translate")
 def translate(request: JsonPathRequest):
     try:
@@ -191,6 +169,7 @@ def translate(request: JsonPathRequest):
         print("ERROR in /translate:", tb)
         raise HTTPException(status_code=500, detail=f"{e}\n\nTRACEBACK:\n{tb}")
 
+#문서 생성
 @app.post("/generate-doc")
 def generate_doc(request: CreateDocRequest):
     if request.doc_type == "부동산등기부등본":
