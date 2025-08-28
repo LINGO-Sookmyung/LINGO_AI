@@ -50,11 +50,7 @@ def delete_directory(path: str):
 def get_output_file(uuid: str, filename: str):
     file_path = f"outputs/{uuid}/{filename}"
     return FileResponse(file_path, media_type="application/json")
-class GptStructureRequest(BaseModel):
-    ocr_path: str
-    doc_type: str
-
-
+    
 
  #이진화 + OCR + GPT 구조화 (부동산등기부등본/가족관계증명서/재학증명서)
 @app.post("/binarize-and-ocr-multi")
@@ -100,51 +96,40 @@ def binarize_and_ocr_multi(request: MultiImagePathRequest):
         with open(merged_path, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=2, ensure_ascii=False)
 
-       
+      
+
         if request.doc_type == "부동산등기부등본":
-            # 등기부등본은 기존대로 merged 결과 경로 반환
-            return {"path": merged_path.replace("\\", "/")}
+            try:
+                with open(merged_path, "r", encoding="utf-8") as f:
+                    ocr_data = json.load(f)
+                if not isinstance(ocr_data, list):
+                    raise ValueError("merged_results.json 형식이 리스트가 아닙니다.")
+
+                gpt_json_result = call_gpt_for_structured_from_ocr(ocr_data, request.doc_type)
+
+                gpt_structured_path = os.path.join(output_dir, f"{session_id}_gpt_structured.json")
+                with open(gpt_structured_path, "w", encoding="utf-8") as f:
+                    f.write(gpt_json_result)
+
+                return {"path": gpt_structured_path.replace("\\", "/")}
+            
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"등기부 GPT 구조화 실패: {e}")
         else:
-            # 그 외 문서는 GPT 구조화 실행 후 그 파일 경로를 반환
             if not image_paths_for_gpt:
-           
-                raise HTTPException(status_code=500, detail="No images to run GPT structuring.")
+                raise HTTPException(status_code=500, detail="gpt 구조화를 위한 이미지가 없습니다.")
+            
             gpt_result_path = os.path.join(output_dir, f"{session_id}_gpt_structured_result.json")
             gpt_json_result = call_gpt_for_structured_json(image_paths_for_gpt, request.doc_type)
             with open(gpt_result_path, "w", encoding="utf-8") as f:
                 f.write(gpt_json_result)
-            return {"path": gpt_result_path.replace("\\", "/")}
+
+            return {"path": gpt_structured_path.replace("\\", "/")}
 
     except Exception:
         tb = traceback.format_exc()
         print("ERROR in /binarize-and-ocr-multi:", tb)
         raise HTTPException(status_code=500, detail=tb)
-    
-
-#부동산등기부등본 구조화
-@app.post("/gpt-structure")
-def gpt_structure(request: GptStructureRequest):
-    try:
-        # 여러페이지인 경우
-        with open(request.ocr_path, "r", encoding="utf-8") as f:
-            ocr_data = json.load(f)
-        if not isinstance(ocr_data, list):
-            raise ValueError("ocr_path 파일 형식이 리스트가 아닙니다. merged_results.json을 전달하세요.")
-
-        # OCR 요약을 GPT에 전달하여 dict 생성
-        gpt_json_result = call_gpt_for_structured_from_ocr(ocr_data, request.doc_type)
-
-        # 저장
-        base = os.path.splitext(os.path.basename(request.ocr_path))[0]
-        sid = str(uuid.uuid4())
-        outdir = os.path.join("outputs", sid); os.makedirs(outdir, exist_ok=True)
-        out_path = os.path.join(outdir, f"{base}_gpt_structured.json")
-        with open(out_path, "w", encoding="utf-8") as f:
-            f.write(gpt_json_result)
-
-        return {"path": out_path}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
     
 
 #변역
