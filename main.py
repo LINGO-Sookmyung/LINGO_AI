@@ -132,7 +132,7 @@ def binarize_and_ocr_multi(request: MultiImagePathRequest):
         raise HTTPException(status_code=500, detail=tb)
     
 
-#변역
+# 번역
 @app.post("/translate")
 def translate(request: JsonPathRequest):
     try:
@@ -142,17 +142,24 @@ def translate(request: JsonPathRequest):
         os.makedirs(output_dir, exist_ok=True)
 
         gpt_json_result = call_gpt_for_translate_json(request.json_path, request.lang)
+
+        # 파일로도 저장
         gpt_result_path = os.path.join(output_dir, f"{base_name}_gpt_translate_result.json")
         with open(gpt_result_path, 'w', encoding='utf-8') as f:
             f.write(gpt_json_result)
 
-      
-        return {"path": gpt_result_path}
+        #객체로 
+        try:
+            obj = json.loads(gpt_json_result)
+        except Exception:
+            obj = None  
 
-    except Exception as e:
+        return {"path": gpt_result_path, "result": obj}
+    
+    except Exception:
         tb = traceback.format_exc()
         print("ERROR in /translate:", tb)
-        raise HTTPException(status_code=500, detail=f"{e}\n\nTRACEBACK:\n{tb}")
+        raise HTTPException(status_code=500, detail="translate failed")
 
 #문서 생성
 @app.post("/generate-doc")
