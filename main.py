@@ -20,6 +20,8 @@ from utils.generate_doc.generate_family_relationship_docx import generate_family
 from pydantic import BaseModel
 from utils.gpt_structure_from_ocr import call_gpt_for_structured_from_ocr
 from fastapi.responses import FileResponse
+from utils.is_within_directory import is_within_directory
+
 
 app = FastAPI()
 os.makedirs("outputs", exist_ok=True)
@@ -110,6 +112,7 @@ def binarize_and_ocr_multi(request: MultiImagePathRequest):
                 gpt_structured_path = os.path.join(output_dir, f"{session_id}_gpt_structured.json")
                 with open(gpt_structured_path, "w", encoding="utf-8") as f:
                     f.write(gpt_json_result)
+            
 
                 return {"path": gpt_structured_path.replace("\\", "/")}
             
@@ -124,7 +127,7 @@ def binarize_and_ocr_multi(request: MultiImagePathRequest):
             with open(gpt_result_path, "w", encoding="utf-8") as f:
                 f.write(gpt_json_result)
 
-            return {"path": gpt_structured_path.replace("\\", "/")}
+            return {"path": gpt_result_path.replace("\\", "/")}
 
     except Exception:
         tb = traceback.format_exc()
@@ -134,7 +137,7 @@ def binarize_and_ocr_multi(request: MultiImagePathRequest):
 
 # 번역
 @app.post("/translate")
-def translate(request: JsonPathRequest):
+def translate(request: JsonPathRequest, background_tasks: BackgroundTasks):
     try:
         base_name = os.path.basename(request.json_path).split('.')[0]
         session_id = str(uuid.uuid4())
@@ -153,6 +156,16 @@ def translate(request: JsonPathRequest):
             obj = json.loads(gpt_json_result)
         except Exception:
             obj = None  
+        
+
+        # 이진화 및 구조화 파일 삭제 예약
+        input_dir = os.path.dirname(request.json_path)
+        if is_within_directory(input_dir, "outputs"):
+            background_tasks.add_task(delete_directory, input_dir)
+
+        # 번역 결과 파일 삭제 예약
+        if is_within_directory(output_dir, "outputs"):
+            background_tasks.add_task(delete_directory, output_dir)
 
         return {"path": gpt_result_path, "result": obj}
     
@@ -163,7 +176,7 @@ def translate(request: JsonPathRequest):
 
 #문서 생성
 @app.post("/generate-doc")
-def generate_doc(request: CreateDocRequest):
+def generate_doc(request: CreateDocRequest, background_tasks: BackgroundTasks):
     if request.doc_type == "부동산등기부등본":
         doc = generate_building_registry_docx(request.json_path, request.ocr_path, request.lang)
     elif request.doc_type == "가족관계증명서":
@@ -175,10 +188,14 @@ def generate_doc(request: CreateDocRequest):
 
     # docx 바이너리는 그대로 FileResponse 유지
     session_id = str(uuid.uuid4())
+    # 임시 파일에 저장
     os.makedirs("translated_outputs", exist_ok=True)
     with NamedTemporaryFile(delete=False, suffix=".docx", dir="translated_outputs") as tmp:
         temp_path = tmp.name
         doc.save(temp_path)
+
+    # 요청 끝나고 파일 삭제 예약
+    background_tasks.add_task(os.remove, temp_path)
 
     base_name = os.path.splitext(os.path.basename(request.json_path))[0]
     return FileResponse(
