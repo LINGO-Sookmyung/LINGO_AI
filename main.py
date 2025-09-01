@@ -21,12 +21,34 @@ from pydantic import BaseModel
 from utils.gpt_structure_from_ocr import call_gpt_for_structured_from_ocr
 from fastapi.responses import FileResponse
 from utils.is_within_directory import is_within_directory
+from typing import Optional, Dict, Any
+from fastapi import Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+import logging, sys, os, json, traceback
 
+
+logging.basicConfig(
+    level=logging.DEBUG,  
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+log = logging.getLogger("lingoai")
 
 app = FastAPI()
+
 os.makedirs("outputs", exist_ok=True)
 app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
  
+
+
+class CreateDocRequest(BaseModel):
+    doc_type: str
+    lang: str
+    json_path: Optional[str] = None 
+    ocr_path: Optional[str] = None
+    editedContentJson: Optional[Dict[str, Any]] = None #수정json
+
 
 class MultiImagePathRequest(BaseModel):
     image_paths: List[str]  # 여러 이미지 경로 리스트
@@ -36,17 +58,16 @@ class JsonPathRequest(BaseModel):
     json_path: str
     lang: str
 
-class CreateDocRequest(BaseModel):
-    doc_type:str
-    json_path:str
-    ocr_path:str
-    lang:str
-
+\
 # 디렉터리 삭제
 def delete_directory(path: str):
     shutil.rmtree(path)
 
-
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    print("[422 BODY]", await request.body())
+    print("[422 ERRORS]", exc.errors())
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
 #웹에서 파일 내용 확인용
 @app.get("/outputs/{uuid}/{filename}")
 def get_output_file(uuid: str, filename: str):
@@ -156,16 +177,6 @@ def translate(request: JsonPathRequest, background_tasks: BackgroundTasks):
             obj = json.loads(gpt_json_result)
         except Exception:
             obj = None  
-        
-
-        # 이진화 및 구조화 파일 삭제 예약
-        input_dir = os.path.dirname(request.json_path)
-        if is_within_directory(input_dir, "outputs"):
-            background_tasks.add_task(delete_directory, input_dir)
-
-        # 번역 결과 파일 삭제 예약
-        if is_within_directory(output_dir, "outputs"):
-            background_tasks.add_task(delete_directory, output_dir)
 
         return {"path": gpt_result_path, "result": obj}
     
@@ -174,11 +185,37 @@ def translate(request: JsonPathRequest, background_tasks: BackgroundTasks):
         print("ERROR in /translate:", tb)
         raise HTTPException(status_code=500, detail="translate failed")
 
-#문서 생성
+
 @app.post("/generate-doc")
 def generate_doc(request: CreateDocRequest, background_tasks: BackgroundTasks):
+    log.debug(f"/generate-doc payload keys={list(request.model_dump().keys())}")
+    print("[DEBUG] doc_type=", request.doc_type)
+    print("[DEBUG] json_path=", request.json_path)
+    print("[DEBUG] ocr_path=", request.ocr_path)
+    print("[DEBUG] exists(json_path)=", os.path.exists(request.json_path or ""))
+
+    # editedContentJson 받으면 임시 파일로 저장해서 json_path로 사용
+    temp_json_path = None
+    if request.editedContentJson is not None:
+        session_id = str(uuid.uuid4())
+        output_dir = os.path.join("outputs", session_id)
+        os.makedirs(output_dir, exist_ok=True)
+        temp_json_path = os.path.join(output_dir, f"{session_id}_edited.json")
+        with open(temp_json_path, "w", encoding="utf-8") as f:
+            json.dump(request.editedContentJson, f, ensure_ascii=False, indent=2)
+        request.json_path = temp_json_path  # 이후 로직은 기존과 동일하게 처리
+        print("[DEBUG] wrote editedContentJson to:", temp_json_path)
+
+    # json_path 없으면 에러
+    if not request.json_path:
+        raise HTTPException(status_code=400, detail="json_path 또는 editedContentJson 중 하나는 필수입니다.")
+
+    if not os.path.exists(request.json_path):
+        raise HTTPException(status_code=400, detail=f"json_path가 없습니다: {request.json_path}")
+
+    # 문서 생성
     if request.doc_type == "부동산등기부등본":
-        doc = generate_building_registry_docx(request.json_path, request.ocr_path, request.lang)
+        doc = generate_building_registry_docx(request.json_path, request.ocr_path or "", request.lang)
     elif request.doc_type == "가족관계증명서":
         doc = generate_family_relationship_docx(request.json_path, request.lang)
     elif request.doc_type == "재학증명서":
@@ -186,16 +223,11 @@ def generate_doc(request: CreateDocRequest, background_tasks: BackgroundTasks):
     else:
         raise HTTPException(status_code=400, detail="지원하지 않는 문서 유형입니다.")
 
-    # docx 바이너리는 그대로 FileResponse 유지
-    session_id = str(uuid.uuid4())
-    # 임시 파일에 저장
+    # 결과 파일 저장 및 반환
     os.makedirs("translated_outputs", exist_ok=True)
     with NamedTemporaryFile(delete=False, suffix=".docx", dir="translated_outputs") as tmp:
         temp_path = tmp.name
         doc.save(temp_path)
-
-    # 요청 끝나고 파일 삭제 예약
-    background_tasks.add_task(os.remove, temp_path)
 
     base_name = os.path.splitext(os.path.basename(request.json_path))[0]
     return FileResponse(
