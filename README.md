@@ -19,7 +19,7 @@
 
 
 ### API
-<img width="733" height="799" alt="image" src="https://github.com/user-attachments/assets/eeefbcb9-c151-43f7-a45a-047ecc9df151" />
+
 
 
 ### MAIN TECHNLOGIES
@@ -28,3 +28,4 @@
 2. 구조화
 3. 번역
 4. 문서 생성
+
